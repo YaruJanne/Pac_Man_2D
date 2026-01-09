@@ -1,10 +1,19 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "PacmanPawn.generated.h"
+
+// Define directions (Enum)
+UENUM(BlueprintType)
+enum class EPadDirection : uint8
+{ 
+	None, 
+	Up, 
+	Down, 
+	Left, 
+	Right 
+};
 
 UCLASS()
 class PAC_MAN_2D_API APacmanPawn : public APawn
@@ -12,18 +21,40 @@ class PAC_MAN_2D_API APacmanPawn : public APawn
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this pawn's properties
 	APacmanPawn();
 
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
 public:	
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
-	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	// --- Config ---
+	UPROPERTY(EditAnywhere, Category="Pacman")
+	float MovementSpeed = 350.0f; 
+
+	// --- State ---
+	// The direction we are currently moving
+	EPadDirection CurrentDir = EPadDirection::None;
+    
+	// The direction the player WANTS to move (buffered)
+	EPadDirection NextDir = EPadDirection::None; 
+
+	// Current logical grid coordinates
+	FVector2D CurrentGridCoords; 
+    
+	// Pointer to the Map (to check walls)
+	// We use "class" here to forward declare it
+	class AMazeGenerator* GameMaze;
+
+	// --- Functions ---
+	// Helper to convert Enum to Vector (e.g., Up -> (1,0,0))
+	FVector GetVectorFromEnum(EPadDirection Dir);
+    
+	// Input Handlers
+	void MoveUp();
+	void MoveDown();
+	void MoveLeft();
+	void MoveRight();
 };

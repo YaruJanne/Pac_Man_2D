@@ -1,32 +1,15 @@
 #include "MazeGenerator.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
-AMazeGenerator::AMazeGenerator()
-{
-	PrimaryActorTick.bCanEverTick = false; // We don't need Tick for the generator
+// =========================================================
+// 1. MAP DATA (28x31)
+// =========================================================
+// We use 'static' so these variables don't conflict with other files
+static const int32 NumRows = 31;
+static const int32 NumCols = 28;
 
-	// Initialize the Instanced Mesh Component
-	WallMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("WallMesh"));
-	RootComponent = WallMesh;
-}
-
-void AMazeGenerator::BeginPlay()
-{
-	Super::BeginPlay();
-	GenerateMaze();
-}
-
-void AMazeGenerator::GenerateMaze()
-{
-	// A simplified example map (1=Wall, 0=Path). 
-	// Classic Pacman is roughly 28x31.
-	// You can copy the full layout array from online "Pacman Grid Data" sources.
-const int32 NumRows = 31;
-const int32 NumCols = 28;
-
-// 1 = Wall
-// 0 = Path / Pellet / Empty Space
-int32 MapLayout[NumRows][NumCols] = {
+// 1 = Wall, 0 = Path
+static const int32 GlobalMapLayout[NumRows][NumCols] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}, // Row 0
     {1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1}, // Row 1
     {1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1}, // Row 2
@@ -60,28 +43,70 @@ int32 MapLayout[NumRows][NumCols] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}  // Row 30
 };
 
-	// Clear old instances just in case
-	WallMesh->ClearInstances();
+// =========================================================
+// 2. ACTOR IMPLEMENTATION
+// =========================================================
 
-	for (int32 Row = 0; Row < NumRows; Row++)
-	{
-		for (int32 Col = 0; Col < NumCols; Col++)
-		{
-			// If the grid value is 1, it's a wall
-			if (MapLayout[Row][Col] == 1)
-			{
-				// Calculate World Position
-				// Note: We multiply by TileSize to space them out
-				float X = Row * TileSize;
-				float Y = Col * TileSize;
-				float Z = 0.0f;
+AMazeGenerator::AMazeGenerator()
+{
+    PrimaryActorTick.bCanEverTick = false; 
+    WallMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("WallMesh"));
+    RootComponent = WallMesh;
+}
 
-				FVector Location(X, Y, Z);
-				FRotator Rotation(0.0f, 0.0f, 0.0f);
+void AMazeGenerator::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+    GenerateMaze();
+}
 
-				// Add the instance
-				WallMesh->AddInstance(FTransform(Rotation, Location));
-			}
-		}
-	}
+void AMazeGenerator::GenerateMaze()
+{
+    if (WallMaterial)
+    {
+        WallMesh->SetMaterial(0, WallMaterial);
+    }
+    
+    WallMesh->ClearInstances();
+
+    // Use the global constants NumRows (31) and NumCols (28)
+    for (int32 Row = 0; Row < NumRows; Row++)
+    {
+       for (int32 Col = 0; Col < NumCols; Col++)
+       {
+          if (GlobalMapLayout[Row][Col] == 1)
+          {
+             // Calculate World Position using TileSize
+             // Note: Swap Row/Col if your map comes out rotated 90 degrees
+             float X = Row * TileSize;
+             float Y = Col * TileSize;
+             
+             // Get Center Position (Add half tile size)
+             // This is CRITICAL for Pacman movement logic
+             float HalfTile = TileSize * 0.5f;
+             FVector Location(X + HalfTile, Y + HalfTile, 0.0f);
+             
+             FRotator Rotation(0.0f, 0.0f, 0.0f);
+
+             WallMesh->AddInstance(FTransform(Rotation, Location));
+          }
+       }
+    }
+}
+
+bool AMazeGenerator::IsWall(int32 Row, int32 Col) const
+{
+    // Check Bounds
+    if (Row < 0 || Row >= NumRows || Col < 0 || Col >= NumCols) {
+       return true; 
+    }
+    // Check Global Array
+    return GlobalMapLayout[Row][Col] == 1;
+}
+
+FVector AMazeGenerator::GetLocationFromGrid(int32 Row, int32 Col) const
+{
+    // Returns the exact world coordinates for a tile center
+    float HalfTile = TileSize * 0.5f;
+    return FVector(Row * TileSize + HalfTile, Col * TileSize + HalfTile, 0.0f);
 }

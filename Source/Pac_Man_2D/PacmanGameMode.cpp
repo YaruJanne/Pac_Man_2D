@@ -6,7 +6,7 @@
 APacmanGameMode::APacmanGameMode()
 {
 	// Set the default pawn class to our custom Pacman Pawn
-	DefaultPawnClass = APacmanPawn::StaticClass();
+	DefaultPawnClass = APacmanPawn::StaticClass();	
 }
 
 void APacmanGameMode::StartPlay()
