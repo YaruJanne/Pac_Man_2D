@@ -38,7 +38,7 @@ void APacmanPawn::BeginPlay()
     if (GameMaze)
     {
         // Snap directly to the starting tile
-        FVector StartPos = GameMaze->GetLocationFromGrid(23, 14); // Adjust based on your map
+        FVector StartPos = GameMaze->GetLocationFromGrid(17, 14); // Adjust based on your map
         SetActorLocation(StartPos);
     }
 }
@@ -61,13 +61,14 @@ void APacmanPawn::Tick(float DeltaTime)
     Super::Tick(DeltaTime);
 
     if (!GameMaze) return;
+    
 
     // --- 1. MOVEMENT LOGIC ---
     
     // Get current Grid Coordinate (Round to nearest integer)
     FVector MyPos = GetActorLocation();
-    int32 CurrentRow = FMath::RoundToInt(MyPos.X / GameMaze->TileSize);
-    int32 CurrentCol = FMath::RoundToInt(MyPos.Y / GameMaze->TileSize);
+    int32 CurrentRow = FMath::FloorToInt(MyPos.X / GameMaze->TileSize);
+    int32 CurrentCol = FMath::FloorToInt(MyPos.Y / GameMaze->TileSize);
 
     // Get the EXACT world center of that tile
     FVector TileCenter = GameMaze->GetLocationFromGrid(CurrentRow, CurrentCol);
@@ -75,6 +76,12 @@ void APacmanPawn::Tick(float DeltaTime)
     // Calculate distance to that center
     // We only care about 2D distance (X and Y)
     float DistToCenter = FVector::Dist2D(MyPos, TileCenter);
+    // --- DEBUG LOGGING ---
+    // This prints your distance and state every frame
+    FString DebugMsg = FString::Printf(TEXT("Dist: %f | Row: %d Col: %d | CurrentDir: %d | NextDir: %d"), 
+        DistToCenter, CurrentRow, CurrentCol, (int)CurrentDir, (int)NextDir);
+    
+    GEngine->AddOnScreenDebugMessage(1, 0.0f, FColor::Yellow, DebugMsg);
 
     // Threshold: How close is "close enough" to turn? (e.g., 5 units)
     float CenterThreshold = 5.0f;
@@ -141,10 +148,19 @@ void APacmanPawn::Tick(float DeltaTime)
 }
 
 // --- INPUT HELPERS ---
-void APacmanPawn::MoveUp()    { NextDir = EPadDirection::Up; }
+void APacmanPawn::MoveUp()    
+{ 
+    { NextDir = EPadDirection::Up; }
+    // Add this log!
+    GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("MoveUp Key Pressed!"));
+    
+    NextDir = EPadDirection::Up; 
+}
 void APacmanPawn::MoveDown()  { NextDir = EPadDirection::Down; }
 void APacmanPawn::MoveLeft()  { NextDir = EPadDirection::Left; }
 void APacmanPawn::MoveRight() { NextDir = EPadDirection::Right; }
+
+
 
 FVector APacmanPawn::GetVectorFromEnum(EPadDirection Dir)
 {
