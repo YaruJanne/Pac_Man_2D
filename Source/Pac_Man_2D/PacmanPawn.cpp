@@ -154,7 +154,6 @@ void APacmanPawn::MoveUp()
     // Add this log!
     GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("MoveUp Key Pressed!"));
     
-    NextDir = EPadDirection::Up; 
 }
 void APacmanPawn::MoveDown()  { NextDir = EPadDirection::Down; }
 void APacmanPawn::MoveLeft()  { NextDir = EPadDirection::Left; }
@@ -168,10 +167,10 @@ FVector APacmanPawn::GetVectorFromEnum(EPadDirection Dir)
     // Assuming standard: X is Up/Down (Rows), Y is Left/Right (Cols)
     switch (Dir)
     {
-        case EPadDirection::Up:    return FVector(1, 0, 0);  // +X (Next Row)
-        case EPadDirection::Down:  return FVector(-1, 0, 0); // -X (Prev Row)
-        case EPadDirection::Right: return FVector(0, 1, 0);  // +Y (Next Col)
-        case EPadDirection::Left:  return FVector(0, -1, 0); // -Y (Prev Col)
-        default: return FVector::ZeroVector;
+    case EPadDirection::Up:    return FVector(-1, 0, 0); // Was (1,0,0) -> Now -X
+    case EPadDirection::Down:  return FVector(1, 0, 0);  // Was (-1,0,0) -> Now +X
+    case EPadDirection::Right: return FVector(0, -1, 0); // Was (0,1,0) -> Now -Y
+    case EPadDirection::Left:  return FVector(0, 1, 0);  // Was (0,-1,0) -> Now +Y
+    default: return FVector::ZeroVector;
     }
 }

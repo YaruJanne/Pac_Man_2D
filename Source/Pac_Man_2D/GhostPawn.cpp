@@ -4,8 +4,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/ConstructorHelpers.h"
-#include "Engine/World.h" 
-#include "DrawDebugHelpers.h" // Optional: To see the laser
+#include "Engine/World.h"
 
 AGhostPawn::AGhostPawn()
 {
@@ -27,87 +26,87 @@ void AGhostPawn::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 1. Find Maze (Critical)
+    // 1. Find Maze 
     AActor* FoundMaze = UGameplayStatics::GetActorOfClass(GetWorld(), AMazeGenerator::StaticClass());
     GameMaze = Cast<AMazeGenerator>(FoundMaze);
 
-    // 2. Try to find Player (Might fail if he hasn't spawned yet)
+    // 2. Try to find Player
     AActor* FoundPlayer = UGameplayStatics::GetActorOfClass(GetWorld(), APacmanPawn::StaticClass());
     PlayerPawn = Cast<APacmanPawn>(FoundPlayer);
 
-    // 3. KICKSTART: Snap to grid and force him to move immediately!
-    // If we don't do this, he starts with Direction::None and never moves.
     if (GameMaze)
     {
-        // A. Snap to the exact center of the spawn tile
-        FVector MyPos = GetActorLocation();
-        int32 StartRow = FMath::FloorToInt(MyPos.X / GameMaze->TileSize);
-        int32 StartCol = FMath::FloorToInt(MyPos.Y / GameMaze->TileSize);
-        
-        FVector CenterPos = GameMaze->GetLocationFromGrid(StartRow, StartCol);
-        SetActorLocation(FVector(CenterPos.X, CenterPos.Y, MyPos.Z));
+        // --- 3. POSITIONING LOGIC ---
+        // Instead of using the Editor location, we FORCE the spawn point based on Ghost Type
+        int32 StartRow = 14;
+        int32 StartCol = 14;
 
-        // B. Make a decision IMMEDIATELY (Don't just force Left!)
-        // This ensures we check walls before taking our first step.
+        switch (GhostType)
+        {
+        case EGhostType::Red:    // Blinky
+            StartRow = 13; 
+            StartCol = 14; 
+            break;
+
+        case EGhostType::Pink:   // Pinky
+            StartRow = 13; 
+            StartCol = 13; 
+            break;
+
+        case EGhostType::Blue:   // Cyan (Inky)
+            StartRow = 14; 
+            StartCol = 14; 
+            break;
+
+        case EGhostType::Orange: // Clyde
+            StartRow = 14; 
+            StartCol = 13; 
+            break;
+        }
+
+        // Snap to the calculated Grid Position
+        FVector CenterPos = GameMaze->GetLocationFromGrid(StartRow, StartCol);
+        SetActorLocation(CenterPos);
+
+        // --- 4. KICKSTART MOVEMENT ---
+        // Make a decision IMMEDIATELY so they don't stand still
         MakeDecisionAtIntersection(StartRow, StartCol);
         
-        // C. Fallback: If trapped or decision failed, try a safe defaults
+        // Safety Fallback: If trapped, force a safe direction (Up usually works in ghost house)
         if (CurrentDir == EGhostDirection::None)
         {
-            // Try Up, then Left, etc., checking for walls manually
-            if (!GameMaze->IsWall(StartRow + 1, StartCol)) CurrentDir = EGhostDirection::Up;
-            else if (!GameMaze->IsWall(StartRow, StartCol - 1)) CurrentDir = EGhostDirection::Left;
-            // Add more else-ifs if needed, or spawn him in a safer spot!
+            CurrentDir = EGhostDirection::Up;
         }
     }
 }
 
 void AGhostPawn::Tick(float DeltaTime)
 {
-        
-    if (!GameMaze) 
-    {
-        // Try to find it again
-        AActor* FoundMaze = UGameplayStatics::GetActorOfClass(GetWorld(), AMazeGenerator::StaticClass());
-        GameMaze = Cast<AMazeGenerator>(FoundMaze);
-        return; // Skip this frame
-    }
-    
-    Super::Tick(DeltaTime);
     if (!GameMaze) return;
 
-    // --- 0. LAZY LOADING PLAYER ---
-    // If we missed the player in BeginPlay, try to find him now
+    // Lazy Load Player if missing
     if (!PlayerPawn)
     {
         AActor* FoundPlayer = UGameplayStatics::GetActorOfClass(GetWorld(), APacmanPawn::StaticClass());
-        if (FoundPlayer)
-        {
-            PlayerPawn = Cast<APacmanPawn>(FoundPlayer);
-            GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("Ghost Found Pacman!"));
-        }
+        if (FoundPlayer) PlayerPawn = Cast<APacmanPawn>(FoundPlayer);
     }
 
     // --- 1. MOVEMENT PHYSICS ---
     FVector MyPos = GetActorLocation();
     
-    // Calculate which tile we are currently "in"
     int32 CurrentRow = FMath::FloorToInt(MyPos.X / GameMaze->TileSize);
     int32 CurrentCol = FMath::FloorToInt(MyPos.Y / GameMaze->TileSize);
     
-    // Calculate center of that tile
     FVector TileCenter = GameMaze->GetLocationFromGrid(CurrentRow, CurrentCol);
     float DistToCenter = FVector::Dist2D(MyPos, TileCenter);
 
     // --- 2. AI DECISION MAKING ---
-    // Tolerance: Needs to be small (e.g. 5.0f) but not impossible to hit
+    // Check if we are close to the center of a tile
     if (DistToCenter < 5.0f)
     {
-        // Only make a decision if we are moving towards the center
-        // (Prevents jittering back and forth)
         MakeDecisionAtIntersection(CurrentRow, CurrentCol);
         
-        // Snap to center to keep lines clean
+        // Snap to center to prevent drift
         FVector NewPos = GetActorLocation();
         NewPos.X = TileCenter.X;
         NewPos.Y = TileCenter.Y;
@@ -118,74 +117,37 @@ void AGhostPawn::Tick(float DeltaTime)
     if (CurrentDir != EGhostDirection::None)
     {
         FVector MoveVec = GetVectorFromEnum(CurrentDir);
-        AddActorWorldOffset(MoveVec * MovementSpeed * DeltaTime);
-    }
-    
-    // --- 4. SAFETY BRAKE (Prevents walking through walls) ---
-    if (CurrentDir != EGhostDirection::None)
-    {
-        FVector ForwardDir = GetVectorFromEnum(CurrentDir);
-        FVector Start = GetActorLocation();
-    
-        // Look ahead 55 units (Tile is 50, so 55 covers the center + wall thickness)
-        FVector End = Start + (ForwardDir * 55.0f); 
-
-        FHitResult HitOut;
-        FCollisionQueryParams TraceParams;
-        TraceParams.AddIgnoredActor(this); // Don't hit ourselves!
-
-        // Fire a "Laser" to check for ANY static mesh wall
-        bool bHitWall = GetWorld()->LineTraceSingleByChannel(
-            HitOut, 
-            Start, 
-            End, 
-            ECC_WorldStatic, // Hits Walls (Static Meshes)
-            TraceParams
-        );
-
-        // --- VISUAL DEBUG (Uncomment to see the laser!) ---
-        // DrawDebugLine(GetWorld(), Start, End, bHitWall ? FColor::Red : FColor::Green, false, -1.0f, 0, 2.0f);
-
-        if (bHitWall)
-        {
-            // We physically hit a wall mesh! STOP.
-            CurrentDir = EGhostDirection::None;
-        
-            // Optional: Re-center slightly to avoid clipping
-            // (This relies on grid logic, but just stopping is usually enough)
-        }
-    }
-    
-
-    // --- 5. APPLY MOVEMENT (Only runs if the brake didn't trigger) ---
-    if (CurrentDir != EGhostDirection::None)
-    {
-        FVector MoveVec = GetVectorFromEnum(CurrentDir);
-        
-        // Use "Sweep = true" for extra physics safety (optional)
-        AddActorWorldOffset(MoveVec * MovementSpeed * DeltaTime, true);
+        AddActorWorldOffset(MoveVec * MovementSpeed * DeltaTime, true); // Sweep=true for safety
     }
 }
 
 FVector2D AGhostPawn::GetTargetTile()
 {
-    // If player is dead or missing, just go to 0,0
-    if (!PlayerPawn) return FVector2D(1, 1);
+    // Default safe target (Ghost House) if player is missing
+    if (!PlayerPawn) return FVector2D(14, 14);
 
     FVector PlayerPos = PlayerPawn->GetActorLocation();
     int32 PRow = FMath::FloorToInt(PlayerPos.X / GameMaze->TileSize);
     int32 PCol = FMath::FloorToInt(PlayerPos.Y / GameMaze->TileSize);
 
-    // --- LOGIC SWITCHER ---
+    // AI PERSONALITY
     switch (GhostType)
     {
         case EGhostType::Red:
-            // Blinky: Target is exactly the player
+            // Blinky: Chases Player directly
             return FVector2D(PRow, PCol);
 
         case EGhostType::Pink:
-            // Pinky: Target is 4 tiles "in front" of player (Task for later)
-            return FVector2D(PRow, PCol); // Placeholder
+            // Pinky: Ambush (Target 4 tiles ahead - Placeholder for now)
+            return FVector2D(PRow, PCol); 
+
+        case EGhostType::Blue:
+            // Cyan: Flanking (Placeholder)
+            return FVector2D(PRow, PCol);
+
+        case EGhostType::Orange:
+            // Clyde: Random/Scatter (Placeholder)
+            return FVector2D(1, 1); // Go to corner
 
         default:
             return FVector2D(PRow, PCol);
@@ -194,11 +156,8 @@ FVector2D AGhostPawn::GetTargetTile()
 
 void AGhostPawn::MakeDecisionAtIntersection(int32 CurrentRow, int32 CurrentCol)
 {
-    // 1. Identify the Target
     FVector2D Target = GetTargetTile();
 
-    // 2. Check all 4 neighbors
-    // We cannot turn back 180 degrees unless stuck
     EGhostDirection BestDir = EGhostDirection::None;
     float ShortestDist = 9999999.0f;
 
@@ -206,22 +165,19 @@ void AGhostPawn::MakeDecisionAtIntersection(int32 CurrentRow, int32 CurrentCol)
 
     for (EGhostDirection TestDir : PossibleDirs)
     {
-        // Don't reverse! (e.g. if going Left, don't check Right)
+        // Rule: Ghosts cannot reverse direction (180 turn) unless dead end
         if (TestDir == GetOppositeDir(CurrentDir)) continue;
 
-        // Get Grid ID of neighbor
         FVector DirVec = GetVectorFromEnum(TestDir);
         int32 NextRow = CurrentRow + (int32)DirVec.X;
         int32 NextCol = CurrentCol + (int32)DirVec.Y;
 
-        // Is it a wall?
+        // Wall Check
         if (GameMaze->IsWall(NextRow, NextCol)) continue;
 
-        // It's a valid path! Calculate distance to Target
-        // Standard Euclidean distance (Hypotenuse)
+        // Distance Check
         float Dist = FVector2D::Distance(FVector2D(NextRow, NextCol), Target);
 
-        // Is this the shortest path so far?
         if (Dist < ShortestDist)
         {
             ShortestDist = Dist;
@@ -229,16 +185,13 @@ void AGhostPawn::MakeDecisionAtIntersection(int32 CurrentRow, int32 CurrentCol)
         }
     }
 
-    // 3. Apply the decision
-    // If dead end (only option was reverse), we might end up with None. 
-    // In that case, force reverse.
     if (BestDir != EGhostDirection::None)
     {
         CurrentDir = BestDir;
     }
     else
     {
-        // Dead End! Turn around.
+        // Dead End Logic: Only option is to reverse
         CurrentDir = GetOppositeDir(CurrentDir);
     }
 }
@@ -256,13 +209,12 @@ EGhostDirection AGhostPawn::GetOppositeDir(EGhostDirection Dir)
 
 FVector AGhostPawn::GetVectorFromEnum(EGhostDirection Dir)
 {
-    // COPY THIS from your PacmanPawn.cpp to ensure directions match!
     switch (Dir)
     {
-        case EGhostDirection::Up:    return FVector(1, 0, 0);
-        case EGhostDirection::Down:  return FVector(-1, 0, 0);
-        case EGhostDirection::Right: return FVector(0, 1, 0);
-        case EGhostDirection::Left:  return FVector(0, -1, 0);
-        default: return FVector::ZeroVector;
+    case EGhostDirection::Up:    return FVector(-1, 0, 0);
+    case EGhostDirection::Down:  return FVector(1, 0, 0);
+    case EGhostDirection::Right: return FVector(0, -1, 0);
+    case EGhostDirection::Left:  return FVector(0, 1, 0);
+    default: return FVector::ZeroVector;
     }
 }
