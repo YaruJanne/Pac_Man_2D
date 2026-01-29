@@ -4,6 +4,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Engine/World.h" 
+#include "DrawDebugHelpers.h" // Optional: To see the laser
 
 AGhostPawn::AGhostPawn()
 {
@@ -117,6 +119,51 @@ void AGhostPawn::Tick(float DeltaTime)
     {
         FVector MoveVec = GetVectorFromEnum(CurrentDir);
         AddActorWorldOffset(MoveVec * MovementSpeed * DeltaTime);
+    }
+    
+    // --- 4. SAFETY BRAKE (Prevents walking through walls) ---
+    if (CurrentDir != EGhostDirection::None)
+    {
+        FVector ForwardDir = GetVectorFromEnum(CurrentDir);
+        FVector Start = GetActorLocation();
+    
+        // Look ahead 55 units (Tile is 50, so 55 covers the center + wall thickness)
+        FVector End = Start + (ForwardDir * 55.0f); 
+
+        FHitResult HitOut;
+        FCollisionQueryParams TraceParams;
+        TraceParams.AddIgnoredActor(this); // Don't hit ourselves!
+
+        // Fire a "Laser" to check for ANY static mesh wall
+        bool bHitWall = GetWorld()->LineTraceSingleByChannel(
+            HitOut, 
+            Start, 
+            End, 
+            ECC_WorldStatic, // Hits Walls (Static Meshes)
+            TraceParams
+        );
+
+        // --- VISUAL DEBUG (Uncomment to see the laser!) ---
+        // DrawDebugLine(GetWorld(), Start, End, bHitWall ? FColor::Red : FColor::Green, false, -1.0f, 0, 2.0f);
+
+        if (bHitWall)
+        {
+            // We physically hit a wall mesh! STOP.
+            CurrentDir = EGhostDirection::None;
+        
+            // Optional: Re-center slightly to avoid clipping
+            // (This relies on grid logic, but just stopping is usually enough)
+        }
+    }
+    
+
+    // --- 5. APPLY MOVEMENT (Only runs if the brake didn't trigger) ---
+    if (CurrentDir != EGhostDirection::None)
+    {
+        FVector MoveVec = GetVectorFromEnum(CurrentDir);
+        
+        // Use "Sweep = true" for extra physics safety (optional)
+        AddActorWorldOffset(MoveVec * MovementSpeed * DeltaTime, true);
     }
 }
 
