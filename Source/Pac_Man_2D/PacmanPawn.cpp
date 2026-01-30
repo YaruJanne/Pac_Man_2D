@@ -38,7 +38,7 @@ void APacmanPawn::BeginPlay()
     if (GameMaze)
     {
         // Snap directly to the starting tile
-        FVector StartPos = GameMaze->GetLocationFromGrid(17, 14); // Adjust based on your map
+        FVector StartPos = GameMaze->GetLocationFromGrid(20, 14); // Adjust based on your map
         SetActorLocation(StartPos);
     }
 }

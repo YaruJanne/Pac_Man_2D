@@ -1,7 +1,8 @@
 #include "PacmanGameMode.h"
 #include "PacmanPawn.h" // Don't forget to include your Pawn's header!
 #include "Kismet/GameplayStatics.h" 
-#include "Camera/CameraActor.h"
+//#include "Camera/CameraActor.h"
+#include "MazeGenerator.h"
 
 APacmanGameMode::APacmanGameMode()
 {
@@ -14,14 +15,22 @@ void APacmanGameMode::StartPlay()
     Super::StartPlay();
 
     // 1. Find the CameraActor in the world (assuming you placed one manually)
-    AActor* MyCamera = UGameplayStatics::GetActorOfClass(this, ACameraActor::StaticClass());
-
+    //  AActor* MyCamera = UGameplayStatics::GetActorOfClass(this, ACameraActor::StaticClass());
+	
+	// 1. Find the Maze Generator
+	AActor* FoundMaze = UGameplayStatics::GetActorOfClass(this, AMazeGenerator::StaticClass());
     // 2. Get the Player Controller
     APlayerController* PC = GetWorld()->GetFirstPlayerController();
 
-    // 3. Set the view
+    /* 3. Set the view
     if (PC && MyCamera)
     {
         PC->SetViewTargetWithBlend(MyCamera);
-    }
+    }*/
+	
+	// 3. Set the view to the Maze Generator (It will find the camera component inside it automatically)
+	if (PC && FoundMaze)
+	{
+		PC->SetViewTargetWithBlend(FoundMaze);
+	}
 }

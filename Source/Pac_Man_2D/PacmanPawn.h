@@ -46,6 +46,7 @@ public:
     
 	// Pointer to the Map (to check walls)
 	// We use "class" here to forward declare it
+	UPROPERTY(VisibleAnywhere, Category = "Refs")
 	class AMazeGenerator* GameMaze;
 
 	// --- Functions ---
